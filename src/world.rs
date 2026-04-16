@@ -2,9 +2,110 @@ use crate::dungeon::Dungeon;
 use crate::entity::{ItemKind, MonsterKind, all_monsters, monster_spec};
 use crate::protocol::{Dir, EntityView, PlayerStats, Tile, WorldView};
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const DEFAULT_CHAR_COLORS: [u8; 6] = [14, 11, 10, 13, 9, 12];
+
+fn tile_code(t: &Tile) -> u8 {
+    match t {
+        Tile::Void => 0,
+        Tile::Wall => 1,
+        Tile::Floor => 2,
+        Tile::Door => 3,
+        Tile::Corridor => 4,
+        Tile::StairsDown => 5,
+        Tile::StairsUp => 6,
+    }
+}
+
+fn opaque(t: Tile) -> bool {
+    matches!(t, Tile::Wall | Tile::Void)
+}
+
+/// Symmetric shadowcasting FOV. Returns tile-index set of visible tiles.
+pub fn compute_fov(d: &Dungeon, px: i32, py: i32, radius: i32) -> HashSet<u32> {
+    let mut visible: HashSet<u32> = HashSet::new();
+    let w = d.w as u32;
+    let idx = |x: i32, y: i32| -> u32 { (y as u32) * w + x as u32 };
+    visible.insert(idx(px, py));
+    // 8 octants
+    for oct in 0..8 {
+        cast_light(d, px, py, radius, 1, 1.0, 0.0, oct, &mut visible);
+    }
+    visible
+}
+
+fn cast_light(
+    d: &Dungeon,
+    cx: i32,
+    cy: i32,
+    radius: i32,
+    row: i32,
+    mut start: f32,
+    end: f32,
+    oct: i32,
+    visible: &mut HashSet<u32>,
+) {
+    if start < end {
+        return;
+    }
+    let mut new_start = 0.0;
+    let mut blocked = false;
+    let w = d.w as i32;
+    let h = d.h as i32;
+    for j in row..=radius {
+        let mut dx = -j - 1;
+        let dy = -j;
+        while dx <= 0 {
+            dx += 1;
+            let (mx, my) = transform(dx, dy, oct);
+            let x = cx + mx;
+            let y = cy + my;
+            let l_slope = (dx as f32 - 0.5) / (dy as f32 + 0.5);
+            let r_slope = (dx as f32 + 0.5) / (dy as f32 - 0.5);
+            if start < r_slope {
+                continue;
+            } else if end > l_slope {
+                break;
+            }
+            if x >= 0 && y >= 0 && x < w && y < h {
+                let dist2 = (mx * mx + my * my) as f32;
+                if dist2 <= (radius * radius) as f32 + 0.5 {
+                    visible.insert((y as u32) * (w as u32) + x as u32);
+                }
+                if blocked {
+                    if opaque(d.tile(x, y)) {
+                        new_start = r_slope;
+                    } else {
+                        blocked = false;
+                        start = new_start;
+                    }
+                } else if opaque(d.tile(x, y)) && j < radius {
+                    blocked = true;
+                    cast_light(d, cx, cy, radius, j + 1, start, l_slope, oct, visible);
+                    new_start = r_slope;
+                }
+            }
+        }
+        if blocked {
+            break;
+        }
+    }
+}
+
+fn transform(dx: i32, dy: i32, oct: i32) -> (i32, i32) {
+    match oct {
+        0 => (dx, dy),
+        1 => (dy, dx),
+        2 => (-dy, dx),
+        3 => (-dx, dy),
+        4 => (-dx, -dy),
+        5 => (-dy, -dx),
+        6 => (dy, -dx),
+        7 => (dx, -dy),
+        _ => (dx, dy),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -34,6 +135,8 @@ pub struct Player {
     pub log: Vec<(String, u8)>, // color-coded
     pub last_damage_source: Option<String>,
     pub last_active_tick: u64,
+    /// Per-depth remembered tile indices.
+    pub memory: HashMap<u32, HashSet<u32>>,
 }
 
 #[derive(Clone, Debug)]
@@ -75,6 +178,7 @@ impl Player {
             log: Vec::new(),
             last_damage_source: None,
             last_active_tick: 0,
+            memory: HashMap::new(),
         }
     }
 
@@ -406,27 +510,61 @@ impl World {
             .map(|i| i.id)
     }
 
-    pub fn build_view_for(&self, player_id: u64) -> Option<WorldView> {
-        let p = self.players.get(&player_id)?;
-        let d = self.level(p.depth);
-        let tiles: Vec<u8> = d
-            .tiles
-            .iter()
-            .map(|t| match t {
-                Tile::Void => 0,
-                Tile::Wall => 1,
-                Tile::Floor => 2,
-                Tile::Door => 3,
-                Tile::Corridor => 4,
-                Tile::StairsDown => 5,
-                Tile::StairsUp => 6,
-            })
-            .collect();
+    pub fn build_view_for(&mut self, player_id: u64) -> Option<WorldView> {
+        let (px, py, depth, alive) = {
+            let p = self.players.get(&player_id)?;
+            (p.x, p.y, p.depth, p.alive)
+        };
+        let sight: i32 = 9;
+        let (w, h) = {
+            let d = self.level(depth);
+            (d.w, d.h)
+        };
+        // Compute visible set via 8-octant shadowcasting (symmetric).
+        let visible: HashSet<u32> = if alive {
+            compute_fov(self.level(depth), px, py, sight)
+        } else {
+            // dead: reveal a small area around the corpse so players can still see chat/world context
+            let mut s = HashSet::new();
+            s.insert((py as u32) * (w as u32) + px as u32);
+            s
+        };
+
+        // Update player memory with currently visible tiles.
+        {
+            let p = self.players.get_mut(&player_id).unwrap();
+            let mem = p.memory.entry(depth).or_default();
+            for idx in &visible {
+                mem.insert(*idx);
+            }
+        }
+
+        let d = self.level(depth);
+        let tiles: Vec<u8> = d.tiles.iter().map(tile_code).collect();
+
+        let mut vis: Vec<u8> = vec![0; d.tiles.len()];
+        let p = self.players.get(&player_id).unwrap();
+        if let Some(mem) = p.memory.get(&depth) {
+            for idx in mem {
+                if let Some(slot) = vis.get_mut(*idx as usize) {
+                    *slot = 1;
+                }
+            }
+        }
+        for idx in &visible {
+            if let Some(slot) = vis.get_mut(*idx as usize) {
+                *slot = 2;
+            }
+        }
 
         let mut entities: Vec<EntityView> = Vec::new();
 
-        // Items first (drawn under entities)
-        for it in self.items.values().filter(|i| i.depth == p.depth) {
+        // Items (only if currently visible)
+        for it in self.items.values().filter(|i| i.depth == depth) {
+            let idx = (it.y as u32) * (w as u32) + it.x as u32;
+            if !visible.contains(&idx) {
+                continue;
+            }
             entities.push(EntityView {
                 id: it.id,
                 x: it.x,
@@ -440,8 +578,12 @@ impl World {
             });
         }
 
-        // Monsters
-        for m in self.monsters.values().filter(|m| m.depth == p.depth) {
+        // Monsters (only if currently visible)
+        for m in self.monsters.values().filter(|m| m.depth == depth) {
+            let idx = (m.y as u32) * (w as u32) + m.x as u32;
+            if !visible.contains(&idx) {
+                continue;
+            }
             let s = monster_spec(m.kind);
             entities.push(EntityView {
                 id: m.id,
@@ -456,8 +598,13 @@ impl World {
             });
         }
 
-        // Other players
-        for other in self.players.values().filter(|o| o.depth == p.depth && o.alive) {
+        // Other players (only if currently visible, plus always include self)
+        for other in self.players.values().filter(|o| o.depth == depth && o.alive) {
+            let idx = (other.y as u32) * (w as u32) + other.x as u32;
+            let is_self = other.id == player_id;
+            if !is_self && !visible.contains(&idx) {
+                continue;
+            }
             entities.push(EntityView {
                 id: other.id,
                 x: other.x,
@@ -466,7 +613,7 @@ impl World {
                 color: other.color,
                 name: other.name.clone(),
                 is_player: true,
-                is_self: other.id == player_id,
+                is_self,
                 hp_frac: other.hp as f32 / other.max_hp.max(1) as f32,
             });
         }
@@ -474,18 +621,21 @@ impl World {
         let players_here = self
             .players
             .values()
-            .filter(|pl| pl.depth == p.depth && pl.alive)
+            .filter(|pl| pl.depth == depth && pl.alive)
             .count() as u32;
 
+        let p = self.players.get(&player_id).unwrap();
         Some(WorldView {
             width: d.w as u16,
             height: d.h as u16,
             tiles,
+            vis,
             entities,
             stats: p.stats(),
-            depth: p.depth,
+            depth,
             players_here,
             alive: p.alive,
+            sight_radius: sight as u16,
         })
     }
 

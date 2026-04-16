@@ -97,11 +97,14 @@ pub struct WorldView {
     pub width: u16,
     pub height: u16,
     pub tiles: Vec<u8>,
+    /// Per-tile visibility: 0 = unseen, 1 = remembered, 2 = visible now
+    pub vis: Vec<u8>,
     pub entities: Vec<EntityView>,
     pub stats: PlayerStats,
     pub depth: u32,
     pub players_here: u32,
     pub alive: bool,
+    pub sight_radius: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

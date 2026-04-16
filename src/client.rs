@@ -345,7 +345,7 @@ impl App {
         let ox = (cx - view_w / 2).max(0).min((w - view_w).max(0));
         let oy = (cy - view_h / 2).max(0).min((h - view_h).max(0));
 
-        // Draw tiles
+        // Draw tiles with visibility shading
         for ty in 0..view_h {
             for tx in 0..view_w {
                 let mx = ox + tx;
@@ -355,7 +355,15 @@ impl App {
                 }
                 let idx = (my as usize) * (w as usize) + mx as usize;
                 let tile = v.tiles[idx];
-                let (ch, style) = tile_style(tile);
+                let visibility = v.vis.get(idx).copied().unwrap_or(0);
+                if visibility == 0 {
+                    continue;
+                }
+                let (ch, mut style) = tile_style(tile);
+                if visibility == 1 {
+                    // remembered: darken substantially
+                    style = Style::default().fg(Color::Rgb(50, 50, 70));
+                }
                 let sx = inner.x + tx as u16;
                 let sy = inner.y + ty as u16;
                 if sx < inner.x + inner.width && sy < inner.y + inner.height {

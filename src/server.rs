@@ -147,7 +147,7 @@ async fn handle_client(state: Arc<ServerState>, stream: UnixStream) -> Result<()
 
     // Send initial state
     {
-        let world = state.world.lock().await;
+        let mut world = state.world.lock().await;
         if let Some(v) = world.build_view_for(pid) {
             let s = serde_json::to_string(&ServerMsg::State(v))?;
             w.write_all(s.as_bytes()).await?;
