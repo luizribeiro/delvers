@@ -136,6 +136,30 @@ fn handle_action(world: &mut World, pid: u64, action: PlayerAction) {
         PlayerAction::Ascend => try_ascend(world, pid),
         PlayerAction::Quaff => try_quaff(world, pid),
         PlayerAction::Wait => {}
+        PlayerAction::Rest => {
+            // Rest: accelerated regen if no monsters are currently visible.
+            let (px, py, depth) = {
+                let p = world.players.get(&pid).unwrap();
+                (p.x, p.y, p.depth)
+            };
+            let nearby = world
+                .monsters
+                .values()
+                .any(|m| m.depth == depth && (m.x - px).abs() + (m.y - py).abs() <= 10);
+            if nearby {
+                if let Some(p) = world.players.get_mut(&pid) {
+                    p.push_log("You sense danger nearby. You cannot rest.", 9);
+                }
+            } else if let Some(p) = world.players.get_mut(&pid) {
+                let before = p.hp;
+                p.hp = (p.hp + 4).min(p.max_hp);
+                if p.hp > before {
+                    p.push_log(format!("You rest. ({} -> {} HP)", before, p.hp), 14);
+                } else {
+                    p.push_log("You rest for a moment.", 8);
+                }
+            }
+        }
         PlayerAction::Respawn => {
             if let Some(p) = world.players.get_mut(&pid) {
                 if !p.alive && p.death_timer == 0 {

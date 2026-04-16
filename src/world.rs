@@ -1,6 +1,6 @@
 use crate::dungeon::Dungeon;
 use crate::entity::{ItemKind, MonsterKind, all_monsters, monster_spec};
-use crate::protocol::{Dir, EntityView, PlayerStats, Tile, WorldView};
+use crate::protocol::{Dir, EntityView, PlayerStats, RosterEntry, Tile, WorldView};
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use std::collections::{HashMap, HashSet};
 
@@ -147,6 +147,7 @@ pub enum PlayerAction {
     Quaff,
     Respawn,
     Wait,
+    Rest,
 }
 
 impl Player {
@@ -308,8 +309,12 @@ impl World {
                 false
             }
         };
-        // Monster count scales with depth
-        let mcount = 5 + depth as usize * 2;
+        // Monster count scales with depth (level 1 is sparse on purpose).
+        let mcount = if depth == 1 {
+            3
+        } else {
+            5 + depth as usize * 2
+        };
         let pool: Vec<MonsterKind> = all_monsters()
             .iter()
             .filter(|k| monster_spec(**k).min_depth <= depth)
@@ -624,6 +629,20 @@ impl World {
             .filter(|pl| pl.depth == depth && pl.alive)
             .count() as u32;
 
+        let mut roster: Vec<RosterEntry> = self
+            .players
+            .values()
+            .map(|pp| RosterEntry {
+                name: pp.name.clone(),
+                color: pp.color,
+                depth: pp.depth,
+                level: pp.level,
+                hp_frac: pp.hp as f32 / pp.max_hp.max(1) as f32,
+                alive: pp.alive,
+            })
+            .collect();
+        roster.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
         let p = self.players.get(&player_id).unwrap();
         Some(WorldView {
             width: d.w as u16,
@@ -636,6 +655,7 @@ impl World {
             players_here,
             alive: p.alive,
             sight_radius: sight as u16,
+            roster,
         })
     }
 

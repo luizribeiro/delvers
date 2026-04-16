@@ -93,6 +93,16 @@ pub struct PlayerStats {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RosterEntry {
+    pub name: String,
+    pub color: u8,
+    pub depth: u32,
+    pub level: u32,
+    pub hp_frac: f32,
+    pub alive: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WorldView {
     pub width: u16,
     pub height: u16,
@@ -105,6 +115,7 @@ pub struct WorldView {
     pub players_here: u32,
     pub alive: bool,
     pub sight_radius: u16,
+    pub roster: Vec<RosterEntry>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -118,7 +129,9 @@ pub enum ClientMsg {
     Ascend,
     Quaff,
     Chat(String),
+    Shout(String),
     Respawn,
+    Rest,
     Quit,
 }
 

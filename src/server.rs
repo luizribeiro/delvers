@@ -263,14 +263,38 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
             if world.chat_log.len() > 500 {
                 world.chat_log.drain(0..250);
             }
-            let msg = ServerMsg::Chat {
-                who,
-                text,
-                color,
-            };
+            let msg = ServerMsg::Chat { who, text, color };
             let clients = state.clients.lock().await;
             for tx in clients.values() {
                 let _ = tx.send(msg.clone());
+            }
+        }
+        ClientMsg::Shout(text) => {
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                return;
+            }
+            let (who, color, depth) = if let Some(p) = world.players.get(&pid) {
+                (p.name.clone(), p.color, p.depth)
+            } else {
+                return;
+            };
+            // Broadcast to players on same depth as a log entry (and to the shouter)
+            let pids_on_depth: Vec<u64> = world
+                .players
+                .values()
+                .filter(|p| p.depth == depth)
+                .map(|p| p.id)
+                .collect();
+            for id in pids_on_depth {
+                if let Some(p) = world.players.get_mut(&id) {
+                    p.push_log(format!("{} shouts: {}", who, text), color);
+                }
+            }
+        }
+        ClientMsg::Rest => {
+            if let Some(p) = world.players.get_mut(&pid) {
+                p.pending_action = Some(PlayerAction::Rest);
             }
         }
         _ => {}

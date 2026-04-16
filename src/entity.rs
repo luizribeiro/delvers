@@ -69,7 +69,7 @@ pub fn monster_spec(kind: MonsterKind) -> MonsterSpec {
             speed: 2,
             xp: 4,
             sight: 7,
-            min_depth: 1,
+            min_depth: 2,
             rarity: 9,
         },
         MonsterKind::Goblin => MonsterSpec {

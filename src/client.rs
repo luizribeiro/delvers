@@ -122,12 +122,19 @@ async fn handle_key(
             KeyCode::Esc => {
                 app.chat_input = false;
                 app.chat_buf.clear();
+                app.chat_is_shout = false;
             }
             KeyCode::Enter => {
                 let text = std::mem::take(&mut app.chat_buf);
+                let was_shout = app.chat_is_shout;
                 app.chat_input = false;
+                app.chat_is_shout = false;
                 if !text.trim().is_empty() {
-                    send(w, &ClientMsg::Chat(text)).await?;
+                    if was_shout {
+                        send(w, &ClientMsg::Shout(text)).await?;
+                    } else {
+                        send(w, &ClientMsg::Chat(text)).await?;
+                    }
                 }
             }
             KeyCode::Backspace => {
@@ -175,6 +182,16 @@ async fn handle_key(
         KeyCode::Char('t') | KeyCode::Char('T') => {
             app.chat_input = true;
             app.chat_buf.clear();
+            app.chat_is_shout = false;
+        }
+        KeyCode::Char('s') => {
+            app.chat_input = true;
+            app.chat_buf.clear();
+            app.chat_is_shout = true;
+        }
+        KeyCode::Char('r') => send(w, &ClientMsg::Rest).await?,
+        KeyCode::Tab => {
+            app.show_labels = !app.show_labels;
         }
         KeyCode::Char('h') | KeyCode::Left => send(w, &ClientMsg::Move(Dir::W)).await?,
         KeyCode::Char('l') | KeyCode::Right => send(w, &ClientMsg::Move(Dir::E)).await?,
@@ -184,7 +201,7 @@ async fn handle_key(
         KeyCode::Char('u') => send(w, &ClientMsg::Move(Dir::NE)).await?,
         KeyCode::Char('b') => send(w, &ClientMsg::Move(Dir::SW)).await?,
         KeyCode::Char('n') => send(w, &ClientMsg::Move(Dir::SE)).await?,
-        KeyCode::Char('.') | KeyCode::Char('s') => send(w, &ClientMsg::Wait).await?,
+        KeyCode::Char('.') => send(w, &ClientMsg::Wait).await?,
         KeyCode::Char(',') | KeyCode::Char('g') => send(w, &ClientMsg::Pickup).await?,
         KeyCode::Char('>') => send(w, &ClientMsg::Descend).await?,
         KeyCode::Char('<') => send(w, &ClientMsg::Ascend).await?,
@@ -210,7 +227,9 @@ pub struct App {
     pub chat: Vec<(String, String, u8)>,
     pub chat_input: bool,
     pub chat_buf: String,
+    pub chat_is_shout: bool,
     pub help_open: bool,
+    pub show_labels: bool,
     pub last_death_by: Option<String>,
 }
 
@@ -225,7 +244,9 @@ impl App {
             chat: Vec::new(),
             chat_input: false,
             chat_buf: String::new(),
+            chat_is_shout: false,
             help_open: false,
+            show_labels: false,
             last_death_by: None,
         }
     }
@@ -286,13 +307,18 @@ impl App {
         // Top: map | sidebar
         let hchunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(40), Constraint::Length(28)])
+            .constraints([Constraint::Min(40), Constraint::Length(30)])
             .split(top);
         let map_area = hchunks[0];
         let side_area = hchunks[1];
 
+        let side_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(11), Constraint::Min(3)])
+            .split(side_area);
         self.draw_map(f, map_area);
-        self.draw_sidebar(f, side_area);
+        self.draw_sidebar(f, side_chunks[0]);
+        self.draw_roster(f, side_chunks[1]);
 
         // Middle: log | chat
         let mchunks = Layout::default()
@@ -404,6 +430,46 @@ impl App {
                 style = style.add_modifier(Modifier::BOLD);
             }
             buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
+        }
+
+        // Optional: player name labels above each visible player (Tab toggles).
+        // Labels alternate above/below so adjacent players don't collide, and we
+        // skip a label if it would overwrite another player's glyph.
+        if self.show_labels {
+            let players: Vec<&crate::protocol::EntityView> =
+                v.entities.iter().filter(|e| e.is_player).collect();
+            for (pi, e) in players.iter().enumerate() {
+                let side = if pi % 2 == 0 { -1 } else { 2 };
+                let label_y = inner.y as i32 + (e.y - oy) + side;
+                if label_y < inner.y as i32 || label_y >= (inner.y + inner.height) as i32 {
+                    continue;
+                }
+                let label = &e.name;
+                // left-anchor at player's x, truncated to fit
+                let mut label_x = inner.x as i32 + (e.x - ox);
+                // If label would extend past right edge, shift left
+                let avail = (inner.x + inner.width) as i32 - label_x;
+                let take = label.chars().count().min(avail.max(0) as usize);
+                if take == 0 {
+                    continue;
+                }
+                // avoid overwriting another player glyph directly
+                for (i, ch) in label.chars().take(take).enumerate() {
+                    let sx = label_x + i as i32;
+                    if sx < inner.x as i32 {
+                        continue;
+                    }
+                    // don't overwrite other players' tiles (those are drawn above)
+                    let style = Style::default()
+                        .fg(ansi_color(e.color))
+                        .bg(Color::Rgb(15, 15, 25))
+                        .add_modifier(Modifier::BOLD);
+                    buf[(sx as u16, label_y as u16)]
+                        .set_char(ch)
+                        .set_style(style);
+                }
+                let _ = label_x;
+            }
         }
         let _ = my_id;
     }
@@ -517,6 +583,59 @@ impl App {
         f.render_widget(p, text_area);
     }
 
+    fn draw_roster(&self, f: &mut ratatui::Frame, area: Rect) {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Adventurers ")
+            .title_style(Style::default().fg(Color::LightGreen));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        let Some(v) = &self.view else { return };
+        let mut lines: Vec<Line> = Vec::new();
+        for r in &v.roster {
+            let name_color = if r.alive {
+                ansi_color(r.color)
+            } else {
+                Color::DarkGray
+            };
+            let hp_color = if !r.alive {
+                Color::DarkGray
+            } else if r.hp_frac > 0.66 {
+                Color::Green
+            } else if r.hp_frac > 0.33 {
+                Color::Yellow
+            } else {
+                Color::Red
+            };
+            let hp_bar = hp_bar_str(r.hp_frac, 6);
+            let depth_mark = if r.depth == v.depth { '@' } else { ' ' };
+            let marker = if r.name == v.stats.name { '>' } else { depth_mark };
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{} ", marker),
+                    Style::default().fg(Color::LightYellow),
+                ),
+                Span::styled(
+                    format!("{:<8}", truncate(&r.name, 8)),
+                    Style::default().fg(name_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" L{:<2} ", r.level), Style::default().fg(Color::Gray)),
+                Span::styled(hp_bar, Style::default().fg(hp_color)),
+                Span::styled(
+                    format!(" d{}", r.depth),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+        if lines.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "no one here yet",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+    }
+
     fn draw_log(&self, f: &mut ratatui::Frame, area: Rect) {
         let block = Block::default()
             .borders(Borders::ALL)
@@ -535,9 +654,13 @@ impl App {
 
     fn draw_chat(&self, f: &mut ratatui::Frame, area: Rect) {
         let title = if self.chat_input {
-            " Chat [typing] ".to_string()
+            if self.chat_is_shout {
+                " Chat [shouting!] ".to_string()
+            } else {
+                " Chat [typing] ".to_string()
+            }
         } else {
-            " Chat  (press t) ".to_string()
+            " Chat (t global, s shout) ".to_string()
         };
         let block = Block::default()
             .borders(Borders::ALL)
@@ -601,10 +724,10 @@ impl App {
             " [?] [Esc] close help ".to_string()
         } else if let Some(v) = &self.view {
             if !v.alive {
-                " You are dead. [Enter] respawn  [Q] quit ".to_string()
+                " You are dead. [Enter] respawn  [t] chat  [Q] quit ".to_string()
             } else {
                 format!(
-                    " hjkl move  yubn diag  , pick  > descend  < ascend  q quaff  t chat  ? help  Q quit   [Depth {}]",
+                    " hjkl move  yubn diag  , pick  > desc  < asc  q quaff  r rest  t chat  s shout  Tab labels  ? help  Q quit   [d{}]",
                     v.depth
                 )
             }
@@ -644,13 +767,16 @@ impl App {
             Line::from(""),
             Line::from("Movement: hjkl or arrow keys"),
             Line::from("Diagonals: y (NW)  u (NE)  b (SW)  n (SE)"),
-            Line::from("Wait a turn: . or s"),
+            Line::from("Wait a turn: ."),
             Line::from(""),
             Line::from(",   Pick up item under your feet"),
             Line::from(">   Descend stairs (glyph '>')"),
             Line::from("<   Ascend stairs   (glyph '<')"),
             Line::from("q   Quaff a healing potion"),
-            Line::from("t   Open chat, Enter sends, Esc cancels"),
+            Line::from("r   Rest (heal ~4 HP, only if no monsters near)"),
+            Line::from("t   Global chat (everyone hears you)"),
+            Line::from("s   Shout to current dungeon level"),
+            Line::from("Tab Toggle player name labels"),
             Line::from(""),
             Line::from("Bump into monsters to attack them."),
             Line::from("Find the Amulet of Yendor on depth 10!"),
@@ -744,6 +870,29 @@ pub fn ansi_color(c: u8) -> Color {
         14 => Color::LightCyan,
         15 => Color::White,
         _ => Color::White,
+    }
+}
+
+fn hp_bar_str(frac: f32, width: usize) -> String {
+    let filled = (frac.clamp(0.0, 1.0) * width as f32).round() as usize;
+    let mut s = String::with_capacity(width + 2);
+    s.push('[');
+    for i in 0..width {
+        if i < filled {
+            s.push('#');
+        } else {
+            s.push('·');
+        }
+    }
+    s.push(']');
+    s
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        s.chars().take(max).collect()
     }
 }
 
