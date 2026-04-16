@@ -3,7 +3,7 @@ use crate::protocol::Dir;
 use crate::world::{Player, PlayerAction, World};
 use rand::Rng;
 
-pub const TICK_MS: u64 = 180;
+pub const TICK_MS: u64 = 120;
 pub const RESPAWN_TICKS: u32 = 25;
 
 fn roll(rng: &mut impl Rng, max: i32) -> i32 {
@@ -16,46 +16,41 @@ fn damage_roll(rng: &mut impl Rng, atk: i32, def: i32) -> i32 {
     (a - d).max(1)
 }
 
-/// Apply all queued player actions, then run monster AI, then resolve effects.
+pub fn handle_player_move(world: &mut World, pid: u64, dir: Dir) {
+    let alive = world.players.get(&pid).map(|p| p.alive).unwrap_or(false);
+    if !alive {
+        return;
+    }
+    handle_move(world, pid, dir);
+}
+
+pub fn handle_player_action(world: &mut World, pid: u64, action: PlayerAction) {
+    let alive = world.players.get(&pid).map(|p| p.alive).unwrap_or(false);
+    match action {
+        PlayerAction::Respawn => {
+            if !alive {
+                if let Some(p) = world.players.get(&pid) {
+                    if p.death_timer == 0 {
+                        respawn(world, pid);
+                    }
+                }
+            }
+        }
+        _ if !alive => {}
+        other => handle_action(world, pid, other),
+    }
+}
+
+/// Run monster AI, apply regen, tick death timers.
 pub fn tick(world: &mut World) {
     world.tick += 1;
 
-    // 1. Disconnected/dead timers
-    let mut respawns: Vec<u64> = Vec::new();
+    // 1. Death timers
     let ids: Vec<u64> = world.players.keys().copied().collect();
     for id in ids {
         let p = world.players.get_mut(&id).unwrap();
-        if !p.alive {
-            if p.death_timer > 0 {
-                p.death_timer -= 1;
-            }
-            // auto-respawn after timer OR explicit Respawn action
-            if matches!(p.pending_action, Some(PlayerAction::Respawn)) && p.death_timer == 0 {
-                respawns.push(id);
-            }
-        }
-    }
-    for id in respawns {
-        respawn(world, id);
-    }
-
-    // 2. Player actions
-    let pids: Vec<u64> = world.players.keys().copied().collect();
-    for pid in pids {
-        let (dir, action, alive) = {
-            let p = world.players.get_mut(&pid).unwrap();
-            let d = p.pending_move.take();
-            let a = p.pending_action.take();
-            (d, a, p.alive)
-        };
-        if !alive {
-            continue;
-        }
-        if let Some(a) = action {
-            handle_action(world, pid, a);
-        }
-        if let Some(d) = dir {
-            handle_move(world, pid, d);
+        if !p.alive && p.death_timer > 0 {
+            p.death_timer -= 1;
         }
     }
 
@@ -195,9 +190,7 @@ fn handle_move(world: &mut World, pid: u64, dir: Dir) {
     }
     let d = world.level(depth);
     if !d.walkable(nx, ny) {
-        if let Some(p) = world.players.get_mut(&pid) {
-            p.push_log("Ouch! You walk into a wall.", 8);
-        }
+        // Silent bump — no log spam.
         return;
     }
     if let Some(p) = world.players.get_mut(&pid) {

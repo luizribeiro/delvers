@@ -309,11 +309,11 @@ impl World {
                 false
             }
         };
-        // Monster count scales with depth (level 1 is sparse on purpose).
+        // Monster count scales with depth (level 1 is gentler).
         let mcount = if depth == 1 {
-            3
+            6
         } else {
-            5 + depth as usize * 2
+            7 + depth as usize * 2
         };
         let pool: Vec<MonsterKind> = all_monsters()
             .iter()

@@ -213,41 +213,16 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
     let mut world = state.world.lock().await;
     match msg {
         ClientMsg::Move(d) => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_move = Some(d);
-            }
+            crate::game::handle_player_move(&mut world, pid, d);
         }
-        ClientMsg::Wait => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Wait);
-            }
-        }
-        ClientMsg::Pickup => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Pickup);
-            }
-        }
-        ClientMsg::Descend => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Descend);
-            }
-        }
-        ClientMsg::Ascend => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Ascend);
-            }
-        }
-        ClientMsg::Quaff => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Quaff);
-            }
-        }
+        ClientMsg::Wait => {}
+        ClientMsg::Pickup => crate::game::handle_player_action(&mut world, pid, PlayerAction::Pickup),
+        ClientMsg::Descend => crate::game::handle_player_action(&mut world, pid, PlayerAction::Descend),
+        ClientMsg::Ascend => crate::game::handle_player_action(&mut world, pid, PlayerAction::Ascend),
+        ClientMsg::Quaff => crate::game::handle_player_action(&mut world, pid, PlayerAction::Quaff),
+        ClientMsg::Rest => crate::game::handle_player_action(&mut world, pid, PlayerAction::Rest),
         ClientMsg::Respawn => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                if !p.alive && p.death_timer == 0 {
-                    p.pending_action = Some(PlayerAction::Respawn);
-                }
-            }
+            crate::game::handle_player_action(&mut world, pid, PlayerAction::Respawn)
         }
         ClientMsg::Chat(text) => {
             let text = text.trim().to_string();
@@ -290,11 +265,6 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
                 if let Some(p) = world.players.get_mut(&id) {
                     p.push_log(format!("{} shouts: {}", who, text), color);
                 }
-            }
-        }
-        ClientMsg::Rest => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.pending_action = Some(PlayerAction::Rest);
             }
         }
         _ => {}
