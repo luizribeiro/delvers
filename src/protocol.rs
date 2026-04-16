@@ -40,13 +40,21 @@ pub enum Tile {
     Corridor = 4,
     StairsDown = 5,
     StairsUp = 6,
+    Altar = 7,
+    Tombstone = 8,
 }
 
 impl Tile {
     pub fn walkable(&self) -> bool {
         matches!(
             self,
-            Tile::Floor | Tile::Door | Tile::Corridor | Tile::StairsDown | Tile::StairsUp
+            Tile::Floor
+                | Tile::Door
+                | Tile::Corridor
+                | Tile::StairsDown
+                | Tile::StairsUp
+                | Tile::Altar
+                | Tile::Tombstone
         )
     }
     pub fn glyph(&self) -> char {
@@ -58,6 +66,8 @@ impl Tile {
             Tile::Corridor => '.',
             Tile::StairsDown => '>',
             Tile::StairsUp => '<',
+            Tile::Altar => '_',
+            Tile::Tombstone => '+',
         }
     }
 }

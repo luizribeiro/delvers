@@ -831,10 +831,10 @@ impl App {
 fn tile_style(tile: u8) -> (char, Style) {
     match tile {
         0 => (' ', Style::default()),
-        1 => ('#', Style::default().fg(Color::Rgb(90, 70, 50))),
-        2 => ('.', Style::default().fg(Color::Rgb(150, 150, 140))),
+        1 => ('#', Style::default().fg(Color::Rgb(110, 85, 60))),
+        2 => ('.', Style::default().fg(Color::Rgb(160, 160, 150))),
         3 => ('+', Style::default().fg(Color::Rgb(200, 130, 60))),
-        4 => ('·', Style::default().fg(Color::Rgb(100, 100, 100))),
+        4 => ('·', Style::default().fg(Color::Rgb(110, 110, 110))),
         5 => (
             '>',
             Style::default()
@@ -845,6 +845,18 @@ fn tile_style(tile: u8) -> (char, Style) {
             '<',
             Style::default()
                 .fg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        7 => (
+            '_',
+            Style::default()
+                .fg(Color::LightMagenta)
+                .add_modifier(Modifier::BOLD),
+        ),
+        8 => (
+            '+',
+            Style::default()
+                .fg(Color::Rgb(190, 190, 220))
                 .add_modifier(Modifier::BOLD),
         ),
         _ => (' ', Style::default()),

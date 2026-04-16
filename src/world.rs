@@ -1,6 +1,6 @@
 use crate::dungeon::Dungeon;
 use crate::entity::{ItemKind, MonsterKind, all_monsters, monster_spec};
-use crate::protocol::{Dir, EntityView, PlayerStats, RosterEntry, Tile, WorldView};
+use crate::protocol::{EntityView, PlayerStats, RosterEntry, Tile, WorldView};
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use std::collections::{HashMap, HashSet};
 
@@ -15,6 +15,8 @@ fn tile_code(t: &Tile) -> u8 {
         Tile::Corridor => 4,
         Tile::StairsDown => 5,
         Tile::StairsUp => 6,
+        Tile::Altar => 7,
+        Tile::Tombstone => 8,
     }
 }
 
@@ -129,9 +131,7 @@ pub struct Player {
     pub has_amulet: bool,
     pub alive: bool,
     pub death_timer: u32,
-    pub connected: bool,
-    pub pending_move: Option<Dir>,
-    pub pending_action: Option<PlayerAction>,
+    pub invuln_ticks: u32,
     pub log: Vec<(String, u8)>, // color-coded
     pub last_damage_source: Option<String>,
     pub last_active_tick: u64,
@@ -146,7 +146,6 @@ pub enum PlayerAction {
     Ascend,
     Quaff,
     Respawn,
-    Wait,
     Rest,
 }
 
@@ -173,9 +172,7 @@ impl Player {
             has_amulet: false,
             alive: true,
             death_timer: 0,
-            connected: true,
-            pending_move: None,
-            pending_action: None,
+            invuln_ticks: 30,
             log: Vec::new(),
             last_damage_source: None,
             last_active_tick: 0,
@@ -260,6 +257,8 @@ pub struct World {
     pub chat_log: Vec<(String, String, u8)>, // (who, text, color)
     pub global_log: Vec<(String, u8)>,
     pub base_seed: u64,
+    pub altars_used: HashMap<u64, HashSet<(u32, i32, i32)>>,
+    pub tombstones: HashMap<(u32, i32, i32), String>,
 }
 
 impl World {
@@ -276,6 +275,8 @@ impl World {
             chat_log: Vec::new(),
             global_log: Vec::new(),
             base_seed: seed,
+            altars_used: HashMap::new(),
+            tombstones: HashMap::new(),
         };
         w.ensure_level(1);
         w
@@ -311,9 +312,9 @@ impl World {
         };
         // Monster count scales with depth (level 1 is gentler).
         let mcount = if depth == 1 {
-            6
+            10
         } else {
-            7 + depth as usize * 2
+            10 + depth as usize * 2
         };
         let pool: Vec<MonsterKind> = all_monsters()
             .iter()

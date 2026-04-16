@@ -80,7 +80,6 @@ impl Dungeon {
         for y in 0..h {
             for x in 0..w {
                 if tiles[y * w + x] == Tile::Void {
-                    // check neighbors
                     let mut touches = false;
                     'outer: for dy in -1..=1i32 {
                         for dx in -1..=1i32 {
@@ -90,10 +89,7 @@ impl Dungeon {
                                 continue;
                             }
                             let t = tiles[ny as usize * w + nx as usize];
-                            if matches!(
-                                t,
-                                Tile::Floor | Tile::Corridor | Tile::Door | Tile::StairsDown | Tile::StairsUp
-                            ) {
+                            if t.walkable() {
                                 touches = true;
                                 break 'outer;
                             }
@@ -135,6 +131,21 @@ impl Dungeon {
         tiles[stairs_down.1 as usize * w + stairs_down.0 as usize] = Tile::StairsDown;
         if depth > 1 {
             tiles[stairs_up.1 as usize * w + stairs_up.0 as usize] = Tile::StairsUp;
+        }
+
+        // Scatter altars in ~25% of rooms (never in the first safe room or last room).
+        for (i, r) in rooms.iter().enumerate() {
+            if i == 0 || i + 1 == rooms.len() {
+                continue;
+            }
+            if rng.gen_bool(0.25) {
+                let ax = rng.gen_range(r.x + 1..r.x + r.w - 1);
+                let ay = rng.gen_range(r.y + 1..r.y + r.h - 1);
+                let idx = ay as usize * w + ax as usize;
+                if tiles[idx] == Tile::Floor {
+                    tiles[idx] = Tile::Altar;
+                }
+            }
         }
 
         Dungeon {
