@@ -864,7 +864,7 @@ impl App {
         f.render_widget(ratatui::widgets::Clear, r);
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Neth4x0rs ")
+            .title(" godwars.ai ")
             .title_style(
                 Style::default()
                     .fg(Color::LightYellow)
@@ -972,7 +972,7 @@ impl App {
         f.render_widget(ratatui::widgets::Clear, r);
         f.render_widget(block, r);
         let text = vec![
-            Line::from("Neth4x0rs — cooperative multi-player roguelike"),
+            Line::from("godwars.ai — cooperative multi-player roguelike"),
             Line::from(""),
             Line::from("Movement: hjkl or arrow keys"),
             Line::from("Diagonals: y (NW)  u (NE)  b (SW)  n (SE)"),

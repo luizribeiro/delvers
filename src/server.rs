@@ -37,7 +37,7 @@ pub async fn run(socket_path: &str) -> Result<()> {
     }
     let listener = UnixListener::bind(socket_path)?;
     let state = Arc::new(ServerState::new());
-    eprintln!("[neth4x0rs server] listening on {}", socket_path);
+    eprintln!("[godwars.ai server] listening on {}", socket_path);
 
     // Spawn game tick task
     {
@@ -300,5 +300,5 @@ fn sanitize_name(name: &str) -> String {
 fn motd() -> String {
     let now = Instant::now();
     let _ = now;
-    "Welcome to Neth4x0rs! hjkl/arrows to move, ',' to pickup, '>' descend, 'q' quaff potion, 't' chat, '?' help, 'Q' quit.".into()
+    "Welcome to godwars.ai! hjkl/arrows to move, ',' to pickup, '>' descend, 'q' quaff potion, 't' chat, '?' help, 'Q' quit.".into()
 }
