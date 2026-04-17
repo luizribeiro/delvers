@@ -6,6 +6,17 @@ use std::collections::{HashMap, HashSet};
 
 pub const DEFAULT_CHAR_COLORS: [u8; 6] = [14, 11, 10, 13, 9, 12];
 
+pub fn compute_score(p: &Player) -> u32 {
+    let mut s = p.gold;
+    s += p.gems * 50;
+    s += p.level * 100;
+    s += p.depth * 25;
+    if p.has_amulet {
+        s += 5000;
+    }
+    s
+}
+
 fn tile_code(t: &Tile) -> u8 {
     match t {
         Tile::Void => 0,
@@ -657,9 +668,12 @@ impl World {
                 level: pp.level,
                 hp_frac: pp.hp as f32 / pp.max_hp.max(1) as f32,
                 alive: pp.alive,
+                score: compute_score(pp),
+                has_amulet: pp.has_amulet,
             })
             .collect();
-        roster.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        // Sort by score descending so leaderboard shows ranking.
+        roster.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.name.cmp(&b.name)));
 
         // Floaters visible on this level within FOV
         let floaters: Vec<Floater> = self

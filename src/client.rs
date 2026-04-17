@@ -704,6 +704,20 @@ impl App {
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
+            lines.push(Line::from(vec![
+                Span::styled(
+                    if r.has_amulet { "  * " } else { "    " },
+                    Style::default().fg(Color::LightYellow),
+                ),
+                Span::styled(
+                    format!("score {}", r.score),
+                    Style::default().fg(if r.has_amulet {
+                        Color::LightYellow
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
+            ]));
         }
         if lines.is_empty() {
             lines.push(Line::from(Span::styled(

@@ -114,6 +114,10 @@ pub struct RosterEntry {
     pub level: u32,
     pub hp_frac: f32,
     pub alive: bool,
+    #[serde(default)]
+    pub score: u32,
+    #[serde(default)]
+    pub has_amulet: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
