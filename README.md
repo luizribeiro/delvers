@@ -1,5 +1,7 @@
 # delvers
 
+[![CI](https://github.com/luizribeiro/delvers/actions/workflows/ci.yml/badge.svg)](https://github.com/luizribeiro/delvers/actions/workflows/ci.yml)
+
 A cooperative multi-player roguelike in your terminal. Built with
 [ratatui](https://ratatui.rs/) and a custom Unix-socket protocol, so every
 player is an instance of the same binary talking to a shared world server
