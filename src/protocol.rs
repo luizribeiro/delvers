@@ -117,6 +117,14 @@ pub struct RosterEntry {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Floater {
+    pub x: i32,
+    pub y: i32,
+    pub text: String,
+    pub color: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WorldView {
     pub width: u16,
     pub height: u16,
@@ -130,6 +138,8 @@ pub struct WorldView {
     pub alive: bool,
     pub sight_radius: u16,
     pub roster: Vec<RosterEntry>,
+    #[serde(default)]
+    pub floaters: Vec<Floater>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

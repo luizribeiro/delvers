@@ -1,6 +1,6 @@
 use crate::dungeon::Dungeon;
 use crate::entity::{ItemKind, MonsterKind, all_monsters, monster_spec};
-use crate::protocol::{EntityView, PlayerStats, RosterEntry, Tile, WorldView};
+use crate::protocol::{EntityView, Floater, PlayerStats, RosterEntry, Tile, WorldView};
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 use std::collections::{HashMap, HashSet};
 
@@ -248,6 +248,16 @@ pub struct Item {
     pub kind: ItemKind,
 }
 
+#[derive(Clone, Debug)]
+pub struct ActiveFloater {
+    pub depth: u32,
+    pub x: i32,
+    pub y: i32,
+    pub text: String,
+    pub color: u8,
+    pub ticks_left: u32,
+}
+
 pub struct World {
     pub levels: HashMap<u32, Dungeon>,
     pub players: HashMap<u64, Player>,
@@ -261,6 +271,7 @@ pub struct World {
     pub base_seed: u64,
     pub altars_used: HashMap<u64, HashSet<(u32, i32, i32)>>,
     pub tombstones: HashMap<(u32, i32, i32), String>,
+    pub floaters: Vec<ActiveFloater>,
 }
 
 impl World {
@@ -279,6 +290,7 @@ impl World {
             base_seed: seed,
             altars_used: HashMap::new(),
             tombstones: HashMap::new(),
+            floaters: Vec::new(),
         };
         w.ensure_level(1);
         w
@@ -649,6 +661,22 @@ impl World {
             .collect();
         roster.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
+        // Floaters visible on this level within FOV
+        let floaters: Vec<Floater> = self
+            .floaters
+            .iter()
+            .filter(|f| {
+                f.depth == depth
+                    && visible.contains(&((f.y as u32) * (w as u32) + f.x as u32))
+            })
+            .map(|f| Floater {
+                x: f.x,
+                y: f.y,
+                text: f.text.clone(),
+                color: f.color,
+            })
+            .collect();
+
         let p = self.players.get(&player_id).unwrap();
         Some(WorldView {
             width: d.w as u16,
@@ -662,6 +690,7 @@ impl World {
             alive: p.alive,
             sight_radius: sight as u16,
             roster,
+            floaters,
         })
     }
 

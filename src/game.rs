@@ -45,6 +45,14 @@ pub fn handle_player_action(world: &mut World, pid: u64, action: PlayerAction) {
 pub fn tick(world: &mut World) {
     world.tick += 1;
 
+    // 0. Tick floaters
+    for f in world.floaters.iter_mut() {
+        if f.ticks_left > 0 {
+            f.ticks_left -= 1;
+        }
+    }
+    world.floaters.retain(|f| f.ticks_left > 0);
+
     // 1. Death timers and invulnerability ticks
     let ids: Vec<u64> = world.players.keys().copied().collect();
     for id in ids {
@@ -282,6 +290,15 @@ fn player_attack_monster(world: &mut World, pid: u64, mid: u64) {
         m.hp -= dmg;
         m.hp <= 0
     };
+    // Damage floater at target
+    world.floaters.push(crate::world::ActiveFloater {
+        depth,
+        x: mx,
+        y: my,
+        text: if crit { format!("-{}!", dmg) } else { format!("-{}", dmg) },
+        color: if crit { 11 } else { 15 },
+        ticks_left: 10,
+    });
     if let Some(p) = world.players.get_mut(&pid) {
         let verb = attack_verb(weapon);
         let msg = if crit {
@@ -356,15 +373,24 @@ fn monster_attack_player(world: &mut World, mid: u64, pid: u64) {
         p.defense()
     };
     let dmg = damage_roll(&mut world.rng, matk, def);
-    let (died, pname) = {
+    let (died, pname, px, py) = {
         let p = world.players.get_mut(&pid).unwrap();
         p.hp -= dmg;
         p.last_active_tick = world.tick;
         p.last_damage_source = Some(mname.clone());
         let verb = monster_attack_verb(mkind);
         p.push_log(format!("The {} {} you for {} damage!", mname, verb, dmg), 9);
-        (p.hp <= 0, p.name.clone())
+        (p.hp <= 0, p.name.clone(), p.x, p.y)
     };
+    // Damage floater on player
+    world.floaters.push(crate::world::ActiveFloater {
+        depth,
+        x: px,
+        y: py,
+        text: format!("-{}", dmg),
+        color: 9,
+        ticks_left: 10,
+    });
     if died {
         kill_player(world, pid, mname.clone());
         let _ = (mx, my);

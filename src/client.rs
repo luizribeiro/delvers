@@ -440,6 +440,27 @@ impl App {
             buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
         }
 
+        // Damage floaters on tiles
+        for flo in v.floaters.iter() {
+            let sx = inner.x as i32 + (flo.x - ox);
+            let sy = inner.y as i32 + (flo.y - oy) - 1;
+            if sy < inner.y as i32 || sy >= (inner.y + inner.height) as i32 {
+                continue;
+            }
+            let base_x = sx;
+            for (i, ch) in flo.text.chars().enumerate() {
+                let cx = base_x + i as i32;
+                if cx < inner.x as i32 || cx >= (inner.x + inner.width) as i32 {
+                    continue;
+                }
+                let style = Style::default()
+                    .fg(ansi_color(flo.color))
+                    .bg(Color::Rgb(30, 10, 10))
+                    .add_modifier(Modifier::BOLD);
+                buf[(cx as u16, sy as u16)].set_char(ch).set_style(style);
+            }
+        }
+
         // Chat bubbles: every visible player with a bubble gets their text
         // rendered above them.
         for e in v.entities.iter().filter(|e| e.is_player && e.bubble.is_some()) {
