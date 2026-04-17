@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: cachix/devenv-action@v1
+
+      - name: Check formatting
+        run: devenv shell -- cargo fmt --all -- --check
+
+      - name: Clippy
+        run: devenv shell -- cargo clippy -- -D warnings
+
+      - name: Test
+        run: devenv shell -- env RUSTFLAGS="-D warnings" cargo test
