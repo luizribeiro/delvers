@@ -164,11 +164,11 @@ impl Handler for SshSession {
         let slave_raw = slave.into_raw_fd();
         let mut cmd = Command::new(&self.exe_path);
         cmd.args([
-            "client",
             "--name",
             &self.username,
             "--socket",
             &self.socket_path,
+            "client",
         ]);
         cmd.env("TERM", &self.term);
         unsafe {
