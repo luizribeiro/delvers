@@ -225,7 +225,17 @@ impl Player {
 
     /// Push an action onto the queue. If the queue is full the action is
     /// silently dropped — this is the rate-limit on a spamming client.
+    /// Same-direction Moves collapse onto the last queued Move so that key
+    /// repeat from a held direction key doesn't pile up "trailing" steps
+    /// that keep walking after the user releases.
     pub fn enqueue(&mut self, a: QueuedAction) {
+        if let QueuedAction::Move(d) = &a {
+            if let Some(QueuedAction::Move(last)) = self.queue.back() {
+                if last == d {
+                    return;
+                }
+            }
+        }
         if self.queue.len() < ACTION_QUEUE_MAX {
             self.queue.push_back(a);
         }
