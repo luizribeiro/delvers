@@ -58,6 +58,14 @@ pub fn tick(world: &mut World) {
                 p.push_log("Your protective aura fades.", 8);
             }
         }
+        if let Some((_, ref mut t)) = p.bubble {
+            if *t > 0 {
+                *t -= 1;
+            }
+        }
+        if let Some((_, 0)) = p.bubble {
+            p.bubble = None;
+        }
     }
 
     // 3. Monster AI + actions

@@ -70,6 +70,12 @@ async fn game_tick(state: &Arc<ServerState>) {
     // Broadcast state to all clients
     let clients = state.clients.lock().await;
     let global_tail: Vec<(String, u8)> = world.global_log.drain(..).collect();
+    // Check for victory (someone has the amulet AND is on depth 1 to escape)
+    let victory_player: Option<String> = world
+        .players
+        .values()
+        .find(|p| p.has_amulet && p.depth == 1)
+        .map(|p| p.name.clone());
     for (pid, tx) in clients.iter() {
         if let Some(view) = world.build_view_for(*pid) {
             let _ = tx.send(ServerMsg::State(view));
@@ -79,6 +85,9 @@ async fn game_tick(state: &Arc<ServerState>) {
                 text: text.clone(),
                 color: *color,
             });
+        }
+        if let Some(name) = &victory_player {
+            let _ = tx.send(ServerMsg::Victory { by: name.clone() });
         }
     }
     // Push per-player log entries
@@ -229,7 +238,9 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
             if text.is_empty() {
                 return;
             }
-            let (who, color) = if let Some(p) = world.players.get(&pid) {
+            let (who, color) = if let Some(p) = world.players.get_mut(&pid) {
+                // Bubble lasts ~40 ticks (~5 seconds at 120ms tick)
+                p.bubble = Some((text.clone(), 40));
                 (p.name.clone(), p.color)
             } else {
                 ("???".to_string(), 7)
@@ -249,7 +260,8 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
             if text.is_empty() {
                 return;
             }
-            let (who, color, depth) = if let Some(p) = world.players.get(&pid) {
+            let (who, color, depth) = if let Some(p) = world.players.get_mut(&pid) {
+                p.bubble = Some((format!("!{}", text), 40));
                 (p.name.clone(), p.color, p.depth)
             } else {
                 return;

@@ -132,6 +132,7 @@ pub struct Player {
     pub alive: bool,
     pub death_timer: u32,
     pub invuln_ticks: u32,
+    pub bubble: Option<(String, u64)>, // (text, ticks-remaining)
     pub log: Vec<(String, u8)>, // color-coded
     pub last_damage_source: Option<String>,
     pub last_active_tick: u64,
@@ -173,6 +174,7 @@ impl Player {
             alive: true,
             death_timer: 0,
             invuln_ticks: 30,
+            bubble: None,
             log: Vec::new(),
             last_damage_source: None,
             last_active_tick: 0,
@@ -521,11 +523,8 @@ impl World {
             let p = self.players.get(&player_id)?;
             (p.x, p.y, p.depth, p.alive)
         };
-        let sight: i32 = 9;
-        let (w, h) = {
-            let d = self.level(depth);
-            (d.w, d.h)
-        };
+        let sight: i32 = 10;
+        let w = self.level(depth).w;
         // Compute visible set via 8-octant shadowcasting (symmetric).
         let visible: HashSet<u32> = if alive {
             compute_fov(self.level(depth), px, py, sight)
@@ -581,6 +580,8 @@ impl World {
                 is_player: false,
                 is_self: false,
                 hp_frac: 1.0,
+                bubble: None,
+                invuln: false,
             });
         }
 
@@ -601,6 +602,8 @@ impl World {
                 is_player: false,
                 is_self: false,
                 hp_frac: m.hp as f32 / m.max_hp.max(1) as f32,
+                bubble: None,
+                invuln: false,
             });
         }
 
@@ -621,6 +624,8 @@ impl World {
                 is_player: true,
                 is_self,
                 hp_frac: other.hp as f32 / other.max_hp.max(1) as f32,
+                bubble: other.bubble.as_ref().map(|b| b.0.clone()),
+                invuln: other.invuln_ticks > 0,
             });
         }
 

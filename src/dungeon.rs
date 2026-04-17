@@ -40,7 +40,7 @@ impl Dungeon {
 
         let mut rooms: Vec<Rect> = Vec::new();
         // Slightly more rooms on deeper levels.
-        let max_rooms = 9 + (depth as usize).min(6);
+        let max_rooms = 11 + (depth as usize).min(6);
         let min_size = 4;
         let max_size = 9;
 

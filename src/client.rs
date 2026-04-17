@@ -231,6 +231,7 @@ pub struct App {
     pub help_open: bool,
     pub show_labels: bool,
     pub last_death_by: Option<String>,
+    pub victory_by: Option<String>,
 }
 
 impl App {
@@ -248,6 +249,7 @@ impl App {
             help_open: false,
             show_labels: false,
             last_death_by: None,
+            victory_by: None,
         }
     }
 
@@ -280,6 +282,9 @@ impl App {
             }
             ServerMsg::Death { by } => {
                 self.last_death_by = Some(by);
+            }
+            ServerMsg::Victory { by } => {
+                self.victory_by = Some(by);
             }
             ServerMsg::Error(e) => {
                 self.log.push((format!("[error] {e}"), 9));
@@ -339,6 +344,9 @@ impl App {
             if !v.alive {
                 self.draw_death(f, area);
             }
+        }
+        if self.victory_by.is_some() {
+            self.draw_victory(f, area);
         }
     }
 
@@ -429,6 +437,55 @@ impl App {
             } else if e.is_player {
                 style = style.add_modifier(Modifier::BOLD);
             }
+            buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
+        }
+
+        // Chat bubbles: every visible player with a bubble gets their text
+        // rendered above them.
+        for e in v.entities.iter().filter(|e| e.is_player && e.bubble.is_some()) {
+            let text = e.bubble.as_ref().unwrap();
+            let label_y = inner.y as i32 + (e.y - oy) - 1;
+            if label_y < inner.y as i32 {
+                continue;
+            }
+            let max_w = (inner.x + inner.width) as i32 - (inner.x as i32 + (e.x - ox));
+            if max_w <= 2 {
+                continue;
+            }
+            let trunc = truncate(text, (max_w as usize).saturating_sub(2).min(40));
+            let base_x = inner.x as i32 + (e.x - ox);
+            let total_len = trunc.chars().count() + 2;
+            for (i, ch) in format!("‹{}›", trunc).chars().enumerate() {
+                let sx = base_x + i as i32;
+                if sx < inner.x as i32 || sx >= (inner.x + inner.width) as i32 {
+                    continue;
+                }
+                let style = Style::default()
+                    .fg(ansi_color(e.color))
+                    .bg(Color::Rgb(30, 30, 50))
+                    .add_modifier(Modifier::BOLD);
+                buf[(sx as u16, label_y as u16)]
+                    .set_char(ch)
+                    .set_style(style);
+            }
+            let _ = total_len;
+        }
+
+        // Invuln shimmer: draw a marker cell over invulnerable players (self too)
+        for e in v.entities.iter().filter(|e| e.is_player && e.invuln) {
+            let sx = inner.x as i32 + (e.x - ox);
+            let sy = inner.y as i32 + (e.y - oy);
+            if sx < inner.x as i32
+                || sy < inner.y as i32
+                || sx >= (inner.x + inner.width) as i32
+                || sy >= (inner.y + inner.height) as i32
+            {
+                continue;
+            }
+            let style = Style::default()
+                .fg(Color::Rgb(200, 220, 255))
+                .bg(Color::Rgb(40, 40, 90))
+                .add_modifier(Modifier::BOLD);
             buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
         }
 
@@ -787,6 +844,62 @@ impl App {
             )),
         ];
         f.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), inner);
+    }
+
+    fn draw_victory(&self, f: &mut ratatui::Frame, area: Rect) {
+        let who = self
+            .victory_by
+            .clone()
+            .unwrap_or_else(|| "??".to_string());
+        let w = 60.min(area.width as u16);
+        let h = 11.min(area.height as u16);
+        let x = area.x + (area.width.saturating_sub(w)) / 2;
+        let y = area.y + (area.height.saturating_sub(h)) / 2;
+        let r = Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
+        f.render_widget(ratatui::widgets::Clear, r);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" VICTORY ")
+            .title_style(
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .bg(Color::Rgb(40, 20, 0))
+                    .add_modifier(Modifier::BOLD),
+            );
+        let inner = block.inner(r);
+        f.render_widget(block, r);
+        let lines = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("  {}  ", who),
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled(
+                "claims the Amulet of Yendor!",
+                Style::default().fg(Color::LightYellow),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "The dungeon bows to a new champion.",
+                Style::default().fg(Color::White),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "[Q] exit",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ];
+        f.render_widget(
+            Paragraph::new(lines).alignment(ratatui::layout::Alignment::Center),
+            inner,
+        );
     }
 
     fn draw_death(&self, f: &mut ratatui::Frame, area: Rect) {

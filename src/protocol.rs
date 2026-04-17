@@ -82,7 +82,11 @@ pub struct EntityView {
     pub name: String,
     pub is_player: bool,
     pub is_self: bool,
-    pub hp_frac: f32, // 0..1
+    pub hp_frac: f32,      // 0..1
+    #[serde(default)]
+    pub bubble: Option<String>,
+    #[serde(default)]
+    pub invuln: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -164,6 +168,9 @@ pub enum ServerMsg {
         color: u8,
     },
     Death {
+        by: String,
+    },
+    Victory {
         by: String,
     },
     Error(String),
