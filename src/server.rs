@@ -220,19 +220,22 @@ async fn handle_client(state: Arc<ServerState>, stream: UnixStream) -> Result<()
 
 async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) {
     let mut world = state.world.lock().await;
+    // Game actions go on the per-player queue; one is popped and executed
+    // each tick. This bounds how fast any single client can act.
+    let enqueue = |world: &mut crate::world::World, action| {
+        if let Some(p) = world.players.get_mut(&pid) {
+            p.enqueue(action);
+        }
+    };
     match msg {
-        ClientMsg::Move(d) => {
-            crate::game::handle_player_move(&mut world, pid, d);
-        }
+        ClientMsg::Move(d) => enqueue(&mut world, crate::world::QueuedAction::Move(d)),
         ClientMsg::Wait => {}
-        ClientMsg::Pickup => crate::game::handle_player_action(&mut world, pid, PlayerAction::Pickup),
-        ClientMsg::Descend => crate::game::handle_player_action(&mut world, pid, PlayerAction::Descend),
-        ClientMsg::Ascend => crate::game::handle_player_action(&mut world, pid, PlayerAction::Ascend),
-        ClientMsg::Quaff => crate::game::handle_player_action(&mut world, pid, PlayerAction::Quaff),
-        ClientMsg::Rest => crate::game::handle_player_action(&mut world, pid, PlayerAction::Rest),
-        ClientMsg::Respawn => {
-            crate::game::handle_player_action(&mut world, pid, PlayerAction::Respawn)
-        }
+        ClientMsg::Pickup => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Pickup)),
+        ClientMsg::Descend => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Descend)),
+        ClientMsg::Ascend => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Ascend)),
+        ClientMsg::Quaff => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Quaff)),
+        ClientMsg::Rest => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Rest)),
+        ClientMsg::Respawn => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Respawn)),
         ClientMsg::Chat(text) => {
             let text = text.trim().to_string();
             if text.is_empty() {

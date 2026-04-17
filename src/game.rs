@@ -1,6 +1,6 @@
 use crate::entity::{ItemKind, monster_spec};
 use crate::protocol::Dir;
-use crate::world::{Player, PlayerAction, World};
+use crate::world::{Player, PlayerAction, QueuedAction, World};
 use rand::Rng;
 
 pub const TICK_MS: u64 = 120;
@@ -41,7 +41,7 @@ pub fn handle_player_action(world: &mut World, pid: u64, action: PlayerAction) {
     }
 }
 
-/// Run monster AI, apply regen, tick death timers.
+/// Pop one queued action per player and resolve it, then run monsters.
 pub fn tick(world: &mut World) {
     world.tick += 1;
 
@@ -52,6 +52,35 @@ pub fn tick(world: &mut World) {
         }
     }
     world.floaters.retain(|f| f.ticks_left > 0);
+
+    // 0b. Drain one queued action per player (tick-gated).
+    let pids: Vec<u64> = world.players.keys().copied().collect();
+    for pid in pids {
+        let action = world
+            .players
+            .get_mut(&pid)
+            .and_then(|p| p.queue.pop_front());
+        if let Some(a) = action {
+            match a {
+                QueuedAction::Move(d) => handle_player_move(world, pid, d),
+                QueuedAction::Act(PlayerAction::Respawn) => {
+                    let can_respawn = world
+                        .players
+                        .get(&pid)
+                        .map(|p| !p.alive && p.death_timer == 0)
+                        .unwrap_or(false);
+                    if can_respawn {
+                        respawn(world, pid);
+                    }
+                }
+                QueuedAction::Act(other) => {
+                    if world.players.get(&pid).map(|p| p.alive).unwrap_or(false) {
+                        handle_action(world, pid, other);
+                    }
+                }
+            }
+        }
+    }
 
     // 1. Death timers and invulnerability ticks
     let ids: Vec<u64> = world.players.keys().copied().collect();

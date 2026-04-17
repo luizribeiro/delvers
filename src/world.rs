@@ -1,8 +1,8 @@
 use crate::dungeon::Dungeon;
 use crate::entity::{ItemKind, MonsterKind, all_monsters, monster_spec};
-use crate::protocol::{EntityView, Floater, PlayerStats, RosterEntry, Tile, WorldView};
+use crate::protocol::{Dir, EntityView, Floater, PlayerStats, RosterEntry, Tile, WorldView};
 use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub const DEFAULT_CHAR_COLORS: [u8; 6] = [14, 11, 10, 13, 9, 12];
 
@@ -149,6 +149,16 @@ pub struct Player {
     pub last_active_tick: u64,
     /// Per-depth remembered tile indices.
     pub memory: HashMap<u32, HashSet<u32>>,
+    /// Bounded queue of pending actions; drained one per tick.
+    pub queue: VecDeque<QueuedAction>,
+}
+
+pub const ACTION_QUEUE_MAX: usize = 3;
+
+#[derive(Clone, Debug)]
+pub enum QueuedAction {
+    Move(Dir),
+    Act(PlayerAction),
 }
 
 #[derive(Clone, Debug)]
@@ -187,6 +197,7 @@ impl Player {
             invuln_ticks: 30,
             bubble: None,
             log: Vec::new(),
+            queue: VecDeque::new(),
             last_damage_source: None,
             last_active_tick: 0,
             memory: HashMap::new(),
@@ -209,6 +220,14 @@ impl Player {
         self.log.push((text.into(), color));
         if self.log.len() > 200 {
             self.log.drain(0..100);
+        }
+    }
+
+    /// Push an action onto the queue. If the queue is full the action is
+    /// silently dropped — this is the rate-limit on a spamming client.
+    pub fn enqueue(&mut self, a: QueuedAction) {
+        if self.queue.len() < ACTION_QUEUE_MAX {
+            self.queue.push_back(a);
         }
     }
 
