@@ -3,11 +3,13 @@ mod dungeon;
 mod entity;
 mod game;
 mod protocol;
+mod pty;
 mod server;
+mod ssh_server;
 mod world;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -28,12 +30,21 @@ struct Cli {
     command: Option<Cmd>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(clap::Subcommand, Debug)]
 enum Cmd {
     /// Run as server only (listen on socket)
     Server,
     /// Run as client only (don't try to auto-spawn server)
     Client,
+    /// Run as an SSH server (spawns game server + accepts SSH connections)
+    SshServer {
+        /// TCP port to listen on
+        #[arg(short = 'p', long, default_value = "2222")]
+        port: u16,
+        /// Path to host key file (generated if missing)
+        #[arg(long)]
+        host_key: Option<PathBuf>,
+    },
 }
 
 fn default_socket_path() -> PathBuf {
@@ -68,6 +79,13 @@ fn main() -> Result<()> {
         Some(Cmd::Client) => {
             let name = cli.name.unwrap_or_else(pick_name);
             run_async(async move { client::run(&socket, &name).await })
+        }
+        Some(Cmd::SshServer { port, host_key }) => {
+            if !can_connect(&socket) {
+                spawn_server(&socket)?;
+                wait_for_socket(&socket, Duration::from_secs(3))?;
+            }
+            run_async(async move { ssh_server::run(port, host_key, &socket).await })
         }
         None => {
             // Auto mode: connect, else spawn server + connect.

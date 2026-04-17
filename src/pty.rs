@@ -28,10 +28,7 @@ pub fn set_window_size(fd: RawFd, cols: u16, rows: u16) -> Result<()> {
     };
     let ret = unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &ws) };
     if ret != 0 {
-        anyhow::bail!(
-            "TIOCSWINSZ failed: {}",
-            std::io::Error::last_os_error()
-        );
+        anyhow::bail!("TIOCSWINSZ failed: {}", std::io::Error::last_os_error());
     }
     Ok(())
 }

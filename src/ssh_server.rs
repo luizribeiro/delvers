@@ -6,8 +6,8 @@ use russh::server::{Auth, Config, Handler, Msg, Server, Session};
 use russh::{Channel, ChannelId, Pty};
 use russh_keys::PrivateKey;
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd};
-use std::path::PathBuf;
 use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -34,10 +34,7 @@ pub async fn run(port: u16, host_key_path: Option<PathBuf>, socket_path: &str) -
 fn load_or_generate_host_key(path: Option<PathBuf>) -> Result<PrivateKey> {
     let key_path = path.unwrap_or_else(default_key_path);
     if key_path.exists() {
-        eprintln!(
-            "[delvers ssh] loading host key from {}",
-            key_path.display()
-        );
+        eprintln!("[delvers ssh] loading host key from {}", key_path.display());
         Ok(russh_keys::load_secret_key(&key_path, None)?)
     } else {
         eprintln!(
