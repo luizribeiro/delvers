@@ -308,7 +308,7 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
     let _ = Dir::N;
 }
 
-fn sanitize_name(name: &str) -> String {
+pub fn sanitize_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
@@ -325,4 +325,32 @@ fn motd() -> String {
     let now = Instant::now();
     let _ = now;
     "Welcome to delvers! hjkl/arrows to move, ',' to pickup, '>' descend, 'q' quaff potion, 't' chat, '?' help, 'Q' quit.".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_name_strips_special_chars() {
+        assert_eq!(sanitize_name("hello world!"), "helloworld");
+        assert_eq!(sanitize_name("player-1_ok"), "player-1_ok");
+        assert_eq!(sanitize_name("a/b/../etc/passwd"), "abetcpasswd");
+    }
+
+    #[test]
+    fn sanitize_name_truncates_to_16() {
+        assert_eq!(
+            sanitize_name("abcdefghijklmnopqrstuvwxyz"),
+            "abcdefghijklmnop"
+        );
+    }
+
+    #[test]
+    fn sanitize_name_generates_fallback_for_empty() {
+        let name = sanitize_name("");
+        assert!(name.starts_with("adventurer"));
+        let name = sanitize_name("!@#$%");
+        assert!(name.starts_with("adventurer"));
+    }
 }
