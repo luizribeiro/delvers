@@ -47,10 +47,10 @@ fn default_socket_path() -> PathBuf {
 }
 
 fn pick_name() -> String {
-    if let Ok(u) = std::env::var("USER") {
-        if !u.is_empty() {
-            return u;
-        }
+    if let Ok(u) = std::env::var("USER")
+        && !u.is_empty()
+    {
+        return u;
     }
     format!("wanderer{}", std::process::id() % 1000)
 }

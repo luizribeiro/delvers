@@ -98,7 +98,11 @@ pub async fn run(socket_path: &str, name: &str) -> Result<()> {
     let _ = w.write_all(b"\n").await;
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
     terminal.show_cursor()?;
     Ok(())
 }
@@ -151,7 +155,10 @@ async fn handle_key(
     }
 
     if app.help_open {
-        if matches!(k.code, KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char(' ')) {
+        if matches!(
+            k.code,
+            KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char(' ')
+        ) {
             app.help_open = false;
         }
         return Ok(false);
@@ -167,22 +174,22 @@ async fn handle_key(
     }
 
     // Dead: show respawn screen (but keep chat usable)
-    if let Some(v) = &app.view {
-        if !v.alive {
-            match k.code {
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    send(w, &ClientMsg::Respawn).await?;
-                }
-                KeyCode::Char('Q') => return Ok(true),
-                KeyCode::Char('t') | KeyCode::Char('T') => {
-                    app.chat_input = true;
-                    app.chat_buf.clear();
-                }
-                KeyCode::Char('?') => app.help_open = true,
-                _ => {}
+    if let Some(v) = &app.view
+        && !v.alive
+    {
+        match k.code {
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                send(w, &ClientMsg::Respawn).await?;
             }
-            return Ok(false);
+            KeyCode::Char('Q') => return Ok(true),
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                app.chat_input = true;
+                app.chat_buf.clear();
+            }
+            KeyCode::Char('?') => app.help_open = true,
+            _ => {}
         }
+        return Ok(false);
     }
 
     match k.code {
@@ -354,10 +361,10 @@ impl App {
             self.draw_splash(f, area);
         }
 
-        if let Some(v) = &self.view {
-            if !v.alive {
-                self.draw_death(f, area);
-            }
+        if let Some(v) = &self.view
+            && !v.alive
+        {
+            self.draw_death(f, area);
         }
         if self.victory_by.is_some() {
             self.draw_victory(f, area);
@@ -451,7 +458,9 @@ impl App {
             } else if e.is_player {
                 style = style.add_modifier(Modifier::BOLD);
             }
-            buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
+            buf[(sx as u16, sy as u16)]
+                .set_char(e.glyph)
+                .set_style(style);
         }
 
         // Damage floaters on tiles
@@ -477,7 +486,11 @@ impl App {
 
         // Chat bubbles: every visible player with a bubble gets their text
         // rendered above them.
-        for e in v.entities.iter().filter(|e| e.is_player && e.bubble.is_some()) {
+        for e in v
+            .entities
+            .iter()
+            .filter(|e| e.is_player && e.bubble.is_some())
+        {
             let text = e.bubble.as_ref().unwrap();
             let label_y = inner.y as i32 + (e.y - oy) - 1;
             if label_y < inner.y as i32 {
@@ -521,7 +534,9 @@ impl App {
                 .fg(Color::Rgb(200, 220, 255))
                 .bg(Color::Rgb(40, 40, 90))
                 .add_modifier(Modifier::BOLD);
-            buf[(sx as u16, sy as u16)].set_char(e.glyph).set_style(style);
+            buf[(sx as u16, sy as u16)]
+                .set_char(e.glyph)
+                .set_style(style);
         }
 
         // Optional: player name labels above each visible player (Tab toggles).
@@ -538,7 +553,7 @@ impl App {
                 }
                 let label = &e.name;
                 // left-anchor at player's x, truncated to fit
-                let mut label_x = inner.x as i32 + (e.x - ox);
+                let label_x = inner.x as i32 + (e.x - ox);
                 // If label would extend past right edge, shift left
                 let avail = (inner.x + inner.width) as i32 - label_x;
                 let take = label.chars().count().min(avail.max(0) as usize);
@@ -701,7 +716,11 @@ impl App {
             };
             let hp_bar = hp_bar_str(r.hp_frac, 6);
             let depth_mark = if r.depth == v.depth { '@' } else { ' ' };
-            let marker = if r.name == v.stats.name { '>' } else { depth_mark };
+            let marker = if r.name == v.stats.name {
+                '>'
+            } else {
+                depth_mark
+            };
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("{} ", marker),
@@ -711,7 +730,10 @@ impl App {
                     format!("{:<8}", truncate(&r.name, 8)),
                     Style::default().fg(name_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(format!(" L{:<2} ", r.level), Style::default().fg(Color::Gray)),
+                Span::styled(
+                    format!(" L{:<2} ", r.level),
+                    Style::default().fg(Color::Gray),
+                ),
                 Span::styled(hp_bar, Style::default().fg(hp_color)),
                 Span::styled(
                     format!(" d{}", r.depth),
@@ -800,7 +822,12 @@ impl App {
             .map(|(who, text, color)| {
                 Line::from(vec![
                     Span::styled("<", Style::default().fg(Color::DarkGray)),
-                    Span::styled(who.clone(), Style::default().fg(ansi_color(*color)).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        who.clone(),
+                        Style::default()
+                            .fg(ansi_color(*color))
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled("> ", Style::default().fg(Color::DarkGray)),
                     Span::styled(text.clone(), Style::default().fg(Color::White)),
                 ])
@@ -851,8 +878,8 @@ impl App {
     }
 
     fn draw_splash(&self, f: &mut ratatui::Frame, area: Rect) {
-        let w = 64.min(area.width as u16);
-        let h = 18.min(area.height as u16);
+        let w = 64.min(area.width);
+        let h = 18.min(area.height);
         let x = area.x + (area.width.saturating_sub(w)) / 2;
         let y = area.y + (area.height.saturating_sub(h)) / 2;
         let r = Rect {
@@ -954,8 +981,8 @@ impl App {
     }
 
     fn draw_help(&self, f: &mut ratatui::Frame, area: Rect) {
-        let w = 60.min(area.width as u16);
-        let h = 18.min(area.height as u16);
+        let w = 60.min(area.width);
+        let h = 18.min(area.height);
         let x = area.x + (area.width.saturating_sub(w)) / 2;
         let y = area.y + (area.height.saturating_sub(h)) / 2;
         let r = Rect {
@@ -999,12 +1026,9 @@ impl App {
     }
 
     fn draw_victory(&self, f: &mut ratatui::Frame, area: Rect) {
-        let who = self
-            .victory_by
-            .clone()
-            .unwrap_or_else(|| "??".to_string());
-        let w = 60.min(area.width as u16);
-        let h = 11.min(area.height as u16);
+        let who = self.victory_by.clone().unwrap_or_else(|| "??".to_string());
+        let w = 60.min(area.width);
+        let h = 11.min(area.height);
         let x = area.x + (area.width.saturating_sub(w)) / 2;
         let y = area.y + (area.height.saturating_sub(h)) / 2;
         let r = Rect {
@@ -1055,8 +1079,8 @@ impl App {
     }
 
     fn draw_death(&self, f: &mut ratatui::Frame, area: Rect) {
-        let w = 50.min(area.width as u16);
-        let h = 9.min(area.height as u16);
+        let w = 50.min(area.width);
+        let h = 9.min(area.height);
         let x = area.x + (area.width.saturating_sub(w)) / 2;
         let y = area.y + (area.height.saturating_sub(h)) / 2;
         let r = Rect {
@@ -1080,7 +1104,9 @@ impl App {
             Line::from(""),
             Line::from(Span::styled(
                 "  R I P  ",
-                Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::LightRed)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from("Press [Enter] to rise again"),

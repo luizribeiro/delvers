@@ -24,23 +24,6 @@ pub fn handle_player_move(world: &mut World, pid: u64, dir: Dir) {
     handle_move(world, pid, dir);
 }
 
-pub fn handle_player_action(world: &mut World, pid: u64, action: PlayerAction) {
-    let alive = world.players.get(&pid).map(|p| p.alive).unwrap_or(false);
-    match action {
-        PlayerAction::Respawn => {
-            if !alive {
-                if let Some(p) = world.players.get(&pid) {
-                    if p.death_timer == 0 {
-                        respawn(world, pid);
-                    }
-                }
-            }
-        }
-        _ if !alive => {}
-        other => handle_action(world, pid, other),
-    }
-}
-
 /// Pop one queued action per player and resolve it, then run monsters.
 pub fn tick(world: &mut World) {
     world.tick += 1;
@@ -95,10 +78,10 @@ pub fn tick(world: &mut World) {
                 p.push_log("Your protective aura fades.", 8);
             }
         }
-        if let Some((_, ref mut t)) = p.bubble {
-            if *t > 0 {
-                *t -= 1;
-            }
+        if let Some((_, ref mut t)) = p.bubble
+            && *t > 0
+        {
+            *t -= 1;
         }
         if let Some((_, 0)) = p.bubble {
             p.bubble = None;
@@ -120,14 +103,16 @@ pub fn tick(world: &mut World) {
         let (mx, my, depth) = (m.x, m.y, m.depth);
         // find nearest alive player on same depth
         let mut best: Option<(u64, i32, i32, i32)> = None; // (pid, px, py, dist^2)
-        for p in world.players.values().filter(|p| p.alive && p.depth == depth) {
+        for p in world
+            .players
+            .values()
+            .filter(|p| p.alive && p.depth == depth)
+        {
             let dx = p.x - mx;
             let dy = p.y - my;
             let dist = dx * dx + dy * dy;
-            if dist <= spec.sight * spec.sight {
-                if best.map_or(true, |b| dist < b.3) {
-                    best = Some((p.id, p.x, p.y, dist));
-                }
+            if dist <= spec.sight * spec.sight && best.is_none_or(|b| dist < b.3) {
+                best = Some((p.id, p.x, p.y, dist));
             }
         }
         if let Some((target_pid, tx, ty, dist_sq)) = best {
@@ -143,11 +128,15 @@ pub fn tick(world: &mut World) {
             let mut moved = false;
             if drift {
                 let mut nearest: Option<(i32, i32, i32)> = None;
-                for p in world.players.values().filter(|p| p.alive && p.depth == depth) {
+                for p in world
+                    .players
+                    .values()
+                    .filter(|p| p.alive && p.depth == depth)
+                {
                     let dx = p.x - mx;
                     let dy = p.y - my;
                     let d2 = dx * dx + dy * dy;
-                    if nearest.map_or(true, |n| d2 < n.2) {
+                    if nearest.is_none_or(|n| d2 < n.2) {
                         nearest = Some((p.x, p.y, d2));
                     }
                 }
@@ -185,7 +174,7 @@ pub fn tick(world: &mut World) {
         let p = world.players.get_mut(&id).unwrap();
         if p.alive && p.hp < p.max_hp {
             let last_dmg_tick = p.last_active_tick;
-            if world.tick.saturating_sub(last_dmg_tick) > 6 && world.tick % 4 == 0 {
+            if world.tick.saturating_sub(last_dmg_tick) > 6 && world.tick.is_multiple_of(4) {
                 p.hp = (p.hp + 1).min(p.max_hp);
             }
         }
@@ -223,10 +212,11 @@ fn handle_action(world: &mut World, pid: u64, action: PlayerAction) {
             }
         }
         PlayerAction::Respawn => {
-            if let Some(p) = world.players.get_mut(&pid) {
-                if !p.alive && p.death_timer == 0 {
-                    respawn(world, pid);
-                }
+            if let Some(p) = world.players.get_mut(&pid)
+                && !p.alive
+                && p.death_timer == 0
+            {
+                respawn(world, pid);
             }
         }
     }
@@ -247,27 +237,27 @@ fn handle_move(world: &mut World, pid: u64, dir: Dir) {
         return;
     }
     // friendly: swap positions with another player (coop-friendly)
-    if let Some(other) = world.player_at(depth, nx, ny) {
-        if other != pid {
-            let other_name = world
-                .players
-                .get(&other)
-                .map(|p| p.name.clone())
-                .unwrap_or_default();
-            let (ox, oy) = {
-                let o = world.players.get_mut(&other).unwrap();
-                let o_xy = (o.x, o.y);
-                o.x = px;
-                o.y = py;
-                o_xy
-            };
-            if let Some(p) = world.players.get_mut(&pid) {
-                p.x = ox;
-                p.y = oy;
-                p.push_log(format!("You swap places with {}.", other_name), 7);
-            }
-            return;
+    if let Some(other) = world.player_at(depth, nx, ny)
+        && other != pid
+    {
+        let other_name = world
+            .players
+            .get(&other)
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let (ox, oy) = {
+            let o = world.players.get_mut(&other).unwrap();
+            let o_xy = (o.x, o.y);
+            o.x = px;
+            o.y = py;
+            o_xy
+        };
+        if let Some(p) = world.players.get_mut(&pid) {
+            p.x = ox;
+            p.y = oy;
+            p.push_log(format!("You swap places with {}.", other_name), 7);
         }
+        return;
     }
     let d = world.level(depth);
     if !d.walkable(nx, ny) {
@@ -286,7 +276,10 @@ fn handle_move(world: &mut World, pid: u64, dir: Dir) {
         {
             let item = world.items.get(&item_id).unwrap().kind;
             if let Some(p2) = world.players.get_mut(&pid) {
-                p2.push_log(format!("You see here: {}. (',' to pick up)", item.name()), 7);
+                p2.push_log(
+                    format!("You see here: {}. (',' to pick up)", item.name()),
+                    7,
+                );
             }
         }
     }
@@ -324,7 +317,11 @@ fn player_attack_monster(world: &mut World, pid: u64, mid: u64) {
         depth,
         x: mx,
         y: my,
-        text: if crit { format!("-{}!", dmg) } else { format!("-{}", dmg) },
+        text: if crit {
+            format!("-{}!", dmg)
+        } else {
+            format!("-{}", dmg)
+        },
         color: if crit { 11 } else { 15 },
         ticks_left: 10,
     });
@@ -335,7 +332,13 @@ fn player_attack_monster(world: &mut World, pid: u64, mid: u64) {
         } else {
             format!("You {} the {} for {} damage.", verb, mname, dmg)
         };
-        let color = if crit { 11 } else if killed { 10 } else { 15 };
+        let color = if crit {
+            11
+        } else if killed {
+            10
+        } else {
+            15
+        };
         p.push_log(msg, color);
     }
     let _ = m_max_hp;
@@ -347,7 +350,7 @@ fn player_attack_monster(world: &mut World, pid: u64, mid: u64) {
         }
         // chance to drop gold
         if world.rng.gen_bool(0.3) {
-            let amount = world.rng.gen_range(3..=8 + depth as u32 * 2);
+            let amount = world.rng.gen_range(3..=8 + depth * 2);
             let id = world.gen_id();
             world.items.insert(
                 id,
@@ -361,7 +364,15 @@ fn player_attack_monster(world: &mut World, pid: u64, mid: u64) {
             );
         }
         // notify nearby players
-        notify_nearby(world, depth, mx, my, 15, &format!("{} killed a {}.", pname, mname), 8);
+        notify_nearby(
+            world,
+            depth,
+            mx,
+            my,
+            15,
+            &format!("{} killed a {}.", pname, mname),
+            8,
+        );
     }
 }
 
@@ -379,7 +390,11 @@ fn monster_attack_player(world: &mut World, mid: u64, pid: u64) {
         };
         if let Some(p) = world.players.get_mut(&pid) {
             p.push_log(
-                format!("The {} {} at you, but you are protected!", mname, monster_attack_verb(mkind)),
+                format!(
+                    "The {} {} at you, but you are protected!",
+                    mname,
+                    monster_attack_verb(mkind)
+                ),
                 14,
             );
         }
@@ -423,10 +438,9 @@ fn monster_attack_player(world: &mut World, mid: u64, pid: u64) {
     if died {
         kill_player(world, pid, mname.clone());
         let _ = (mx, my);
-        world.global_log.push((
-            format!("*** {} was slain by a {}. ***", pname, mname),
-            9,
-        ));
+        world
+            .global_log
+            .push((format!("*** {} was slain by a {}. ***", pname, mname), 9));
     }
 }
 
@@ -471,7 +485,9 @@ fn kill_player(world: &mut World, pid: u64, by: String) {
     let current = world.level(depth).tile(x, y);
     if matches!(
         current,
-        crate::protocol::Tile::Floor | crate::protocol::Tile::Corridor | crate::protocol::Tile::Door
+        crate::protocol::Tile::Floor
+            | crate::protocol::Tile::Corridor
+            | crate::protocol::Tile::Door
     ) {
         world
             .level_mut(depth)
@@ -486,9 +502,8 @@ fn respawn(world: &mut World, pid: u64) {
     // Clear any monsters that drifted into the safe room so we don't
     // die instantly on respawn.
     if let Some(r) = d1.rooms.first().cloned() {
-        let in_safe = |x: i32, y: i32| -> bool {
-            x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
-        };
+        let in_safe =
+            |x: i32, y: i32| -> bool { x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h };
         let to_remove: Vec<u64> = world
             .monsters
             .values()
@@ -584,10 +599,21 @@ fn try_pickup(world: &mut World, pid: u64) {
                 let bonus_new = k.weapon_bonus().unwrap();
                 let bonus_old = p.weapon.and_then(|w| w.weapon_bonus()).unwrap_or(0);
                 if bonus_new > bonus_old {
-                    p.push_log(format!("You wield a {}. (atk {} -> {})", k.name(), bonus_old, bonus_new), 14);
+                    p.push_log(
+                        format!(
+                            "You wield a {}. (atk {} -> {})",
+                            k.name(),
+                            bonus_old,
+                            bonus_new
+                        ),
+                        14,
+                    );
                     p.weapon = Some(k);
                 } else {
-                    p.push_log(format!("You find a {} but your weapon is better.", k.name()), 8);
+                    p.push_log(
+                        format!("You find a {} but your weapon is better.", k.name()),
+                        8,
+                    );
                     // drop it back
                     let (x, y, depth) = (p.x, p.y, p.depth);
                     let id = world.gen_id();
@@ -607,10 +633,16 @@ fn try_pickup(world: &mut World, pid: u64) {
                 let bonus_new = k.armor_bonus().unwrap();
                 let bonus_old = p.armor.and_then(|a| a.armor_bonus()).unwrap_or(0);
                 if bonus_new > bonus_old {
-                    p.push_log(format!("You don {}. (def {} -> {})", k.name(), bonus_old, bonus_new), 14);
+                    p.push_log(
+                        format!("You don {}. (def {} -> {})", k.name(), bonus_old, bonus_new),
+                        14,
+                    );
                     p.armor = Some(k);
                 } else {
-                    p.push_log(format!("You find {} but your armor is better.", k.name()), 8);
+                    p.push_log(
+                        format!("You find {} but your armor is better.", k.name()),
+                        8,
+                    );
                     let (x, y, depth) = (p.x, p.y, p.depth);
                     let id = world.gen_id();
                     world.items.insert(
@@ -764,14 +796,19 @@ fn pray_at_altar(world: &mut World, pid: u64) {
         return;
     }
     let roll = world.rng.gen_range(0..100);
-    let mut log = |world: &mut World, pid, text: String, color| {
+    let log = |world: &mut World, pid, text: String, color| {
         if let Some(p) = world.players.get_mut(&pid) {
             p.push_log(text, color);
         }
     };
     match roll {
         0..=15 => {
-            log(world, pid, "The gods are displeased! Lightning strikes!".into(), 9);
+            log(
+                world,
+                pid,
+                "The gods are displeased! Lightning strikes!".into(),
+                9,
+            );
             let p = world.players.get_mut(&pid).unwrap();
             let d = (p.max_hp / 4).max(3);
             p.hp = (p.hp - d).max(1);

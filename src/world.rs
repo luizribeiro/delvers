@@ -48,6 +48,7 @@ pub fn compute_fov(d: &Dungeon, px: i32, py: i32, radius: i32) -> HashSet<u32> {
     visible
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cast_light(
     d: &Dungeon,
     cx: i32,
@@ -144,7 +145,7 @@ pub struct Player {
     pub death_timer: u32,
     pub invuln_ticks: u32,
     pub bubble: Option<(String, u64)>, // (text, ticks-remaining)
-    pub log: Vec<(String, u8)>, // color-coded
+    pub log: Vec<(String, u8)>,        // color-coded
     pub last_damage_source: Option<String>,
     pub last_active_tick: u64,
     /// Per-depth remembered tile indices.
@@ -229,12 +230,11 @@ impl Player {
     /// repeat from a held direction key doesn't pile up "trailing" steps
     /// that keep walking after the user releases.
     pub fn enqueue(&mut self, a: QueuedAction) {
-        if let QueuedAction::Move(d) = &a {
-            if let Some(QueuedAction::Move(last)) = self.queue.back() {
-                if last == d {
-                    return;
-                }
-            }
+        if let QueuedAction::Move(d) = &a
+            && let Some(QueuedAction::Move(last)) = self.queue.back()
+            && last == d
+        {
+            return;
         }
         if self.queue.len() < ACTION_QUEUE_MAX {
             self.queue.push_back(a);
@@ -276,7 +276,6 @@ pub struct Monster {
     pub hp: i32,
     pub max_hp: i32,
     pub tick_counter: u32,
-    pub target: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -417,7 +416,6 @@ impl World {
                         hp: spec.hp,
                         max_hp: spec.hp,
                         tick_counter: 0,
-                        target: None,
                     },
                 );
             }
@@ -428,7 +426,7 @@ impl World {
         for _ in 0..icount {
             let roll = rng.gen_range(0..100);
             let kind = if roll < 45 {
-                ItemKind::Gold(rng.gen_range(5..=25 + depth as u32 * 5))
+                ItemKind::Gold(rng.gen_range(5..=25 + depth * 5))
             } else if roll < 60 {
                 ItemKind::Potion
             } else if roll < 75 {
@@ -436,9 +434,17 @@ impl World {
                 let wpool: &[ItemKind] = if depth <= 2 {
                     &[ItemKind::Dagger, ItemKind::ShortSword]
                 } else if depth <= 5 {
-                    &[ItemKind::ShortSword, ItemKind::LongSword, ItemKind::BattleAxe]
+                    &[
+                        ItemKind::ShortSword,
+                        ItemKind::LongSword,
+                        ItemKind::BattleAxe,
+                    ]
                 } else {
-                    &[ItemKind::LongSword, ItemKind::BattleAxe, ItemKind::WarHammer]
+                    &[
+                        ItemKind::LongSword,
+                        ItemKind::BattleAxe,
+                        ItemKind::WarHammer,
+                    ]
                 };
                 *wpool.choose(&mut rng).unwrap()
             } else if roll < 88 {
@@ -563,13 +569,6 @@ impl World {
             .map(|p| p.id)
     }
 
-    pub fn item_at(&self, depth: u32, x: i32, y: i32) -> Option<u64> {
-        self.items
-            .values()
-            .find(|i| i.depth == depth && i.x == x && i.y == y)
-            .map(|i| i.id)
-    }
-
     pub fn build_view_for(&mut self, player_id: u64) -> Option<WorldView> {
         let (px, py, depth, alive) = {
             let p = self.players.get(&player_id)?;
@@ -660,7 +659,11 @@ impl World {
         }
 
         // Other players (only if currently visible, plus always include self)
-        for other in self.players.values().filter(|o| o.depth == depth && o.alive) {
+        for other in self
+            .players
+            .values()
+            .filter(|o| o.depth == depth && o.alive)
+        {
             let idx = (other.y as u32) * (w as u32) + other.x as u32;
             let is_self = other.id == player_id;
             if !is_self && !visible.contains(&idx) {
@@ -709,8 +712,7 @@ impl World {
             .floaters
             .iter()
             .filter(|f| {
-                f.depth == depth
-                    && visible.contains(&((f.y as u32) * (w as u32) + f.x as u32))
+                f.depth == depth && visible.contains(&((f.y as u32) * (w as u32) + f.x as u32))
             })
             .map(|f| Floater {
                 x: f.x,

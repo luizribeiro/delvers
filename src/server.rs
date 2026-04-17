@@ -130,8 +130,7 @@ async fn handle_client(state: Arc<ServerState>, stream: UnixStream) -> Result<()
     // Register player
     let pid = {
         let mut world = state.world.lock().await;
-        let id = world.spawn_player(name.clone());
-        id
+        world.spawn_player(name.clone())
     };
     {
         let mut clients = state.clients.lock().await;
@@ -151,7 +150,9 @@ async fn handle_client(state: Arc<ServerState>, stream: UnixStream) -> Result<()
     // Announce join
     {
         let mut world = state.world.lock().await;
-        world.global_log.push((format!("{} has entered the dungeon.", name), 14));
+        world
+            .global_log
+            .push((format!("{} has entered the dungeon.", name), 14));
     }
 
     // Send initial state
@@ -211,7 +212,9 @@ async fn handle_client(state: Arc<ServerState>, stream: UnixStream) -> Result<()
         let name = world.players.get(&pid).map(|p| p.name.clone());
         world.remove_player(pid);
         if let Some(n) = name {
-            world.global_log.push((format!("{} has left the dungeon.", n), 8));
+            world
+                .global_log
+                .push((format!("{} has left the dungeon.", n), 8));
         }
     }
     writer_task.abort();
@@ -230,12 +233,30 @@ async fn process_client_msg(state: &Arc<ServerState>, pid: u64, msg: ClientMsg) 
     match msg {
         ClientMsg::Move(d) => enqueue(&mut world, crate::world::QueuedAction::Move(d)),
         ClientMsg::Wait => {}
-        ClientMsg::Pickup => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Pickup)),
-        ClientMsg::Descend => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Descend)),
-        ClientMsg::Ascend => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Ascend)),
-        ClientMsg::Quaff => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Quaff)),
-        ClientMsg::Rest => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Rest)),
-        ClientMsg::Respawn => enqueue(&mut world, crate::world::QueuedAction::Act(PlayerAction::Respawn)),
+        ClientMsg::Pickup => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Pickup),
+        ),
+        ClientMsg::Descend => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Descend),
+        ),
+        ClientMsg::Ascend => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Ascend),
+        ),
+        ClientMsg::Quaff => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Quaff),
+        ),
+        ClientMsg::Rest => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Rest),
+        ),
+        ClientMsg::Respawn => enqueue(
+            &mut world,
+            crate::world::QueuedAction::Act(PlayerAction::Respawn),
+        ),
         ClientMsg::Chat(text) => {
             let text = text.trim().to_string();
             if text.is_empty() {
