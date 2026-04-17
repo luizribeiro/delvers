@@ -1,4 +1,4 @@
-# godwars.ai
+# delvers
 
 A cooperative multi-player roguelike in your terminal. Built with
 [ratatui](https://ratatui.rs/) and a custom Unix-socket protocol, so every
@@ -93,7 +93,7 @@ on a 120 ms tick.
 ## Running as a shell replacement
 
 The binary is self-contained, so you can set it as a login shell on a
-server (`chsh -s /usr/local/bin/godwars-ai`) to let SSH users drop
+server (`chsh -s /usr/local/bin/delvers`) to let SSH users drop
 straight into the dungeon. That part isn't wired up yet — but the
 single-binary, auto-spawn design is built to make it easy.
 
@@ -107,8 +107,8 @@ cargo build --release
 Clean up a stuck server socket:
 
 ```sh
-rm -f "$XDG_RUNTIME_DIR/godwars.sock"
+rm -f "$XDG_RUNTIME_DIR/delvers.sock"
 ```
 
-Server logs go to `/tmp/godwars.log` by default (override with
-`GODWARS_LOG`).
+Server logs go to `/tmp/delvers.log` by default (override with
+`DELVERS_LOG`).

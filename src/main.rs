@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use tokio::net::UnixStream;
 
 #[derive(Parser, Debug)]
-#[command(name = "godwars.ai", about = "A cooperative multi-player roguelike")]
+#[command(name = "delvers", about = "A cooperative multi-player roguelike")]
 struct Cli {
     /// Player name (for client mode)
     #[arg(short = 'n', long)]
@@ -37,13 +37,13 @@ enum Cmd {
 }
 
 fn default_socket_path() -> PathBuf {
-    if let Ok(p) = std::env::var("GODWARS_SOCKET") {
+    if let Ok(p) = std::env::var("DELVERS_SOCKET") {
         return PathBuf::from(p);
     }
     let dir = std::env::var("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/tmp"));
-    dir.join("godwars.sock")
+    dir.join("delvers.sock")
 }
 
 fn pick_name() -> String {
@@ -104,7 +104,7 @@ fn can_connect(socket: &str) -> bool {
 
 fn spawn_server(socket: &str) -> Result<()> {
     let exe = std::env::current_exe()?;
-    let log_path = std::env::var("GODWARS_LOG").unwrap_or_else(|_| "/tmp/godwars.log".into());
+    let log_path = std::env::var("DELVERS_LOG").unwrap_or_else(|_| "/tmp/delvers.log".into());
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
