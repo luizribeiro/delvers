@@ -157,6 +157,15 @@ async fn handle_key(
         return Ok(false);
     }
 
+    if app.splash_open {
+        // Any key (except Q) dismisses
+        if matches!(k.code, KeyCode::Char('Q')) {
+            return Ok(true);
+        }
+        app.splash_open = false;
+        return Ok(false);
+    }
+
     // Dead: show respawn screen (but keep chat usable)
     if let Some(v) = &app.view {
         if !v.alive {
@@ -229,6 +238,7 @@ pub struct App {
     pub chat_buf: String,
     pub chat_is_shout: bool,
     pub help_open: bool,
+    pub splash_open: bool,
     pub show_labels: bool,
     pub last_death_by: Option<String>,
     pub victory_by: Option<String>,
@@ -247,6 +257,7 @@ impl App {
             chat_buf: String::new(),
             chat_is_shout: false,
             help_open: false,
+            splash_open: true,
             show_labels: false,
             last_death_by: None,
             victory_by: None,
@@ -338,6 +349,9 @@ impl App {
 
         if self.help_open {
             self.draw_help(f, area);
+        }
+        if self.splash_open {
+            self.draw_splash(f, area);
         }
 
         if let Some(v) = &self.view {
@@ -834,6 +848,109 @@ impl App {
                 .add_modifier(Modifier::BOLD),
         )));
         f.render_widget(p, area);
+    }
+
+    fn draw_splash(&self, f: &mut ratatui::Frame, area: Rect) {
+        let w = 64.min(area.width as u16);
+        let h = 18.min(area.height as u16);
+        let x = area.x + (area.width.saturating_sub(w)) / 2;
+        let y = area.y + (area.height.saturating_sub(h)) / 2;
+        let r = Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
+        f.render_widget(ratatui::widgets::Clear, r);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Neth4x0rs ")
+            .title_style(
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            );
+        let inner = block.inner(r);
+        f.render_widget(block, r);
+        let lines = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "A cooperative multi-player roguelike",
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Welcome, ", Style::default().fg(Color::Gray)),
+                Span::styled(
+                    self.my_name.clone(),
+                    Style::default()
+                        .fg(Color::LightYellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    ". Other adventurers share this dungeon.",
+                    Style::default().fg(Color::Gray),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Descend 10 levels and retrieve the Amulet of Yendor.",
+                Style::default().fg(Color::White),
+            )),
+            Line::from(Span::styled(
+                "Return to level 1 alive, and win glory for all time.",
+                Style::default().fg(Color::White),
+            )),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    "hjkl",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" move   "),
+                Span::styled(
+                    "t",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" chat   "),
+                Span::styled(
+                    "s",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" shout   "),
+                Span::styled(
+                    "?",
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" help"),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Bump monsters to attack them. ',' picks up / prays / reads graves.",
+                Style::default().fg(Color::Gray),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Press any key to enter the dungeon...",
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::SLOW_BLINK),
+            )),
+        ];
+        f.render_widget(
+            Paragraph::new(lines).alignment(ratatui::layout::Alignment::Center),
+            inner,
+        );
     }
 
     fn draw_help(&self, f: &mut ratatui::Frame, area: Rect) {
